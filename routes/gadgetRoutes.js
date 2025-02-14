@@ -67,4 +67,73 @@ router.post("/", async (req, res) => {
   }
 });
 
+router.patch("/:identifier", async (req, res) => {
+  try {
+    const { identifier } = req.params; // This can be either id or codename
+    const { name, description, status } = req.body;
+
+    // Validate status
+    if (status && !['Available', 'Deployed'].includes(status)) {
+      return res.status(400).json({ 
+        message: "❌ Status can only be 'Available' or 'Deployed'!" 
+      });
+    }
+
+    // Check if any updateable fields are provided
+    if (!name && !description && !status) {
+      return res.status(400).json({ 
+        message: "❌ At least one field (name, description, or status) must be provided!" 
+      });
+    }
+
+    // Determine if identifier is UUID or codename
+    const isUUID = identifier.includes('-');
+    
+    // Find the gadget first to check its current status
+    const existingGadget = await prisma.gadget.findUnique({
+      where: isUUID 
+        ? { id: identifier }
+        : { codename: identifier }
+    });
+
+    if (!existingGadget) {
+      return res.status(404).json({ 
+        message: "❌ Gadget not found!" 
+      });
+    }
+
+    // Check if gadget is already decommissioned or destroyed
+    if (['Decommissioned', 'Destroyed'].includes(existingGadget.status)) {
+      return res.status(400).json({ 
+        message: `❌ Cannot update a ${existingGadget.status.toLowerCase()} gadget!` 
+      });
+    }
+
+    // Update the gadget
+    const updatedGadget = await prisma.gadget.update({
+      where: isUUID 
+        ? { id: identifier }
+        : { codename: identifier },
+      data: {
+        ...(name && { name }),
+        ...(description && { description }),
+        ...(status && { status }),
+        updated_at: new Date()
+      }
+    });
+
+    console.log("✅ Gadget updated:", updatedGadget);
+    res.json({ 
+      message: "✅ Gadget updated successfully!", 
+      gadget: updatedGadget 
+    });
+
+  } catch (error) {
+    console.error("❌ Error in PATCH /gadgets:", error);
+    res.status(500).json({ 
+      message: "❌ Failed to update gadget!" 
+    });
+  }
+});
+
 module.exports = router;
