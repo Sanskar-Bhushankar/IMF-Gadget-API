@@ -1,32 +1,15 @@
-const { Sequelize } = require("sequelize");
-require("dotenv").config(); // Load environment variables
+// We can remove this file entirely since we're using Prisma
 
-// Connect to PostgreSQL database using DATABASE_URL from .env
-const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
-  host: process.env.DB_HOST,
-  dialect: "postgres",
-  logging: console.log, // Enable logging temporarily for debugging
-});
-
-// Function to check database connection
+// If you want to keep it for future reference, you can simplify it to:
 const testDatabaseConnection = async () => {
   try {
-    await sequelize.authenticate();
+    const prisma = require('../lib/prisma');
+    await prisma.$connect();
     console.log("✅ Database connection established successfully.");
-    
-    // Test if the gadgets table exists
-    const [results] = await sequelize.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'gadgets'
-      );
-    `);
-    console.log("Gadgets table exists:", results[0].exists);
-    
   } catch (error) {
     console.error("❌ Database connection failed:", error);
     throw error;
   }
 };
 
-module.exports = { sequelize, testDatabaseConnection };
+module.exports = { testDatabaseConnection };
