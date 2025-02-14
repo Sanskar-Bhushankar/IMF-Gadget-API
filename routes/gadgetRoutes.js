@@ -1,6 +1,7 @@
 const express = require("express");
 const prisma = require('../lib/prisma');
 const { generateUniqueCodename } = require("../utils/codenameGenerator");
+const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
@@ -38,10 +39,9 @@ router.post("/", async (req, res) => {
   try {
     console.log("📝 Received POST request:", req.body);
     
-    const { name, description, status } = req.body;
-    if (!name || !status) {
-      console.log("❌ Validation failed: Missing name or status");
-      return res.status(400).json({ message: "❌ Name and status are required!" });
+    const { name, description } = req.body;
+    if (!name) {
+      return res.status(400).json({ message: "❌ Name is required!" });
     }
 
     console.log("🎲 Generating unique codename...");
@@ -50,20 +50,26 @@ router.post("/", async (req, res) => {
 
     const newGadget = await prisma.gadget.create({
       data: {
+        id: uuidv4(),
         name,
         codename: uniqueCodename,
         description: description || "No description provided",
-        status: status,
-        created_at: new Date(),
-        updated_at: new Date()
+        status: 'Available'
       }
     });
 
     console.log("✅ Gadget created:", newGadget);
-    res.status(201).json({ message: "✅ Gadget added successfully!", gadget: newGadget });
+    res.status(201).json({ 
+      message: "✅ Gadget added successfully!", 
+      gadget: newGadget 
+    });
+
   } catch (error) {
     console.error("❌ Error in POST /gadgets:", error);
-    res.status(500).json({ message: "❌ Failed to add gadget!", error: error.message });
+    res.status(500).json({ 
+      message: "❌ Failed to add gadget!", 
+      error: error.message 
+    });
   }
 });
 
@@ -138,12 +144,13 @@ router.patch("/:identifier", async (req, res) => {
 
 router.delete("/:identifier", async (req, res) => {
   try {
-    const { identifier } = req.params; // This can be either id or codename
+    const { identifier } = req.params;
+    console.log("🗑️ Attempting to decommission gadget:", identifier);
 
     // Determine if identifier is UUID or codename
     const isUUID = identifier.includes('-');
     
-    // Find the gadget first to check its current status
+    // Find the gadget first
     const existingGadget = await prisma.gadget.findUnique({
       where: isUUID 
         ? { id: identifier }
@@ -151,23 +158,24 @@ router.delete("/:identifier", async (req, res) => {
     });
 
     if (!existingGadget) {
+      console.log("❌ Gadget not found:", identifier);
       return res.status(404).json({ 
         message: "❌ Gadget not found!" 
       });
     }
 
-    // Check if gadget is already decommissioned or destroyed
-    if (['Decommissioned', 'Destroyed'].includes(existingGadget.status)) {
+    // Check if gadget is already decommissioned
+    if (existingGadget.status === 'Decommissioned') {
       return res.status(400).json({ 
-        message: `❌ Gadget is already ${existingGadget.status.toLowerCase()}!` 
+        message: "❌ Gadget is already decommissioned!" 
       });
     }
 
-    // Update the gadget to Decommissioned status
+    // Update using Prisma's update method instead of raw SQL
     const decommissionedGadget = await prisma.gadget.update({
-      where: isUUID 
-        ? { id: identifier }
-        : { codename: identifier },
+      where: {
+        id: existingGadget.id
+      },
       data: {
         status: 'Decommissioned',
         decommissioned_at: new Date(),
@@ -182,9 +190,64 @@ router.delete("/:identifier", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error in DELETE /gadgets:", error);
+    console.error("❌ Detailed error in decommission:", error);
     res.status(500).json({ 
-      message: "❌ Failed to decommission gadget!" 
+      message: "❌ Failed to decommission gadget!",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Add this new route for self-destruct
+router.post("/:identifier/self-destruct", async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    console.log("💥 Attempting to self-destruct gadget:", identifier);
+
+    // Determine if identifier is UUID or codename
+    const isUUID = identifier.includes('-');
+    
+    // Find the gadget first
+    const existingGadget = await prisma.gadget.findUnique({
+      where: isUUID 
+        ? { id: identifier }
+        : { codename: identifier }
+    });
+
+    if (!existingGadget) {
+      return res.status(404).json({ 
+        message: "❌ Gadget not found!" 
+      });
+    }
+
+    // Check if gadget is already decommissioned
+    if (existingGadget.status === 'Decommissioned') {
+      return res.status(400).json({ 
+        message: "❌ Gadget is already decommissioned!" 
+      });
+    }
+
+    // Update the gadget status to Decommissioned
+    const destroyedGadget = await prisma.gadget.update({
+      where: {
+        id: existingGadget.id
+      },
+      data: {
+        status: 'Decommissioned',
+        updated_at: new Date(),
+        decommissioned_at: new Date()
+      }
+    });
+
+    res.json({ 
+      message: "💥 Gadget has been destroyed!", 
+      gadget: destroyedGadget 
+    });
+
+  } catch (error) {
+    console.error("❌ Error in self-destruct:", error);
+    res.status(500).json({ 
+      message: "❌ Failed to destroy gadget!" 
     });
   }
 });
