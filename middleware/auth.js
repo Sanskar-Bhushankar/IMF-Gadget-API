@@ -3,7 +3,10 @@ const prisma = require('../lib/prisma');
 
 const auth = async (req, res, next) => {
   try {
-    // Check for session
+    console.log('Session:', req.session);
+    console.log('Session ID:', req.sessionID);
+    console.log('User ID in session:', req.session.userId);
+
     if (!req.session.userId) {
       return res.status(401).json({ message: "❌ Authentication required!" });
     }
@@ -13,12 +16,14 @@ const auth = async (req, res, next) => {
     });
 
     if (!user) {
+      console.log('User not found for ID:', req.session.userId);
       throw new Error();
     }
 
     req.user = user;
     next();
   } catch (error) {
+    console.error('Auth Error:', error);
     res.status(401).json({ message: "❌ Please authenticate!" });
   }
 };
