@@ -8,6 +8,15 @@ const router = express.Router();
 // Function to generate a random success probability percentage
 const generateSuccessProbability = () => `${Math.floor(Math.random() * 100) + 1}%`;
 
+// Add this helper function at the top with other utility functions
+const generateVerificationCode = () => {
+  // Generate a random 6-digit number and convert to string with leading zeros
+  const number = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+  // Generate a random letter (A-Z)
+  const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+  return `${number}${letter}`;
+};
+
 router.get("/", async (req, res) => {
   try {
     const { status } = req.query;
@@ -198,7 +207,7 @@ router.delete("/:identifier", async (req, res) => {
   }
 });
 
-// Add this new route for self-destruct
+// Update the self-destruct endpoint
 router.post("/:identifier/self-destruct", async (req, res) => {
   try {
     const { identifier } = req.params;
@@ -227,6 +236,9 @@ router.post("/:identifier/self-destruct", async (req, res) => {
       });
     }
 
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+
     // Update the gadget status to Decommissioned
     const destroyedGadget = await prisma.gadget.update({
       where: {
@@ -241,6 +253,7 @@ router.post("/:identifier/self-destruct", async (req, res) => {
 
     res.json({ 
       message: "💥 Gadget has been destroyed!", 
+      verificationId: verificationCode,
       gadget: destroyedGadget 
     });
 
