@@ -1,5 +1,5 @@
 const express = require("express");
-const Gadget = require("../models/Gadget");
+const prisma = require('../lib/prisma');
 const { generateUniqueCodename } = require("../utils/codenameGenerator");
 
 const router = express.Router();
@@ -12,8 +12,11 @@ router.get("/", async (req, res) => {
     const { status } = req.query;
     
     const whereClause = status ? { status } : {};
-    const gadgets = await Gadget.findAll({
-      where: whereClause
+    const gadgets = await prisma.gadget.findMany({
+      where: whereClause,
+      orderBy: {
+        created_at: 'desc'
+      }
     });
 
     const gadgetsWithSuccessProbability = gadgets.map((gadget) => ({
@@ -21,11 +24,13 @@ router.get("/", async (req, res) => {
       name: gadget.name,
       status: gadget.status,
       successProbability: generateSuccessProbability(),
+      created_at: gadget.created_at,
+      last_mission_date: gadget.last_mission_date
     }));
 
     res.json(gadgetsWithSuccessProbability);
   } catch (error) {
-    res.status(500).json({ message: "❌ Failed to fetch gadgets!", error: error.message });
+    res.status(500).json({ message: "❌ Failed to fetch gadgets!" });
   }
 });
 
@@ -43,11 +48,15 @@ router.post("/", async (req, res) => {
     const uniqueCodename = await generateUniqueCodename();
     console.log("✨ Generated codename:", uniqueCodename);
 
-    const newGadget = await Gadget.create({
-      name,
-      codename: uniqueCodename,
-      description: description || "No description provided",
-      status
+    const newGadget = await prisma.gadget.create({
+      data: {
+        name,
+        codename: uniqueCodename,
+        description: description || "No description provided",
+        status: status,
+        created_at: new Date(),
+        updated_at: new Date()
+      }
     });
 
     console.log("✅ Gadget created:", newGadget);

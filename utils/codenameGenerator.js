@@ -1,5 +1,5 @@
 const { uniqueNamesGenerator, adjectives, animals } = require("unique-names-generator");
-const Gadget = require("../models/Gadget");
+const prisma = require('../lib/prisma');
 
 const generateUniqueCodename = async () => {
   let codename;
@@ -18,8 +18,8 @@ const generateUniqueCodename = async () => {
     console.log(`Generated codename: ${codename}`);
 
     try {
-      // Check if codename already exists using the model
-      const count = await Gadget.count({
+      // Check if codename already exists using Prisma
+      const count = await prisma.gadget.count({
         where: {
           codename: codename
         }
