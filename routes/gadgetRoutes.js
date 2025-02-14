@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require('../lib/prisma');
 const { generateUniqueCodename } = require("../utils/codenameGenerator");
 const { v4: uuidv4 } = require('uuid');
+const { auth, adminOnly, allowRoles } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -17,30 +18,56 @@ const generateVerificationCode = () => {
   return `${number}${letter}`;
 };
 
-router.get("/", async (req, res) => {
+// Add auth middleware to all routes
+router.use(auth);
+
+// Allow both USER and ADMIN to access GET endpoint
+router.get("/", allowRoles(['USER', 'ADMIN']), async (req, res) => {
   try {
     const { status } = req.query;
     
+    // Validate status if provided
+    if (status && !['Available', 'Deployed', 'Destroyed', 'Decommissioned'].includes(status)) {
+      return res.status(400).json({ 
+        message: "❌ Invalid status! Must be one of: Available, Deployed, Destroyed, Decommissioned" 
+      });
+    }
+
+    // Build where clause
     const whereClause = status ? { status } : {};
+
+    // Get gadgets with filter
     const gadgets = await prisma.gadget.findMany({
       where: whereClause,
       orderBy: {
         created_at: 'desc'
+      },
+      select: {
+        id: true,
+        name: true,
+        codename: true,
+        status: true,
+        created_at: true,
+        last_mission_date: true,
+        description: true
       }
     });
 
+    // Add success probability to each gadget
     const gadgetsWithSuccessProbability = gadgets.map((gadget) => ({
-      id: gadget.id,
-      name: gadget.name,
-      status: gadget.status,
-      successProbability: generateSuccessProbability(),
-      created_at: gadget.created_at,
-      last_mission_date: gadget.last_mission_date
+      ...gadget,
+      successProbability: generateSuccessProbability()
     }));
 
+    console.log(`✅ Found ${gadgets.length} gadgets${status ? ` with status: ${status}` : ''}`);
     res.json(gadgetsWithSuccessProbability);
+
   } catch (error) {
-    res.status(500).json({ message: "❌ Failed to fetch gadgets!" });
+    console.error("❌ Error fetching gadgets:", error);
+    res.status(500).json({ 
+      message: "❌ Failed to fetch gadgets!",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -151,7 +178,7 @@ router.patch("/:identifier", async (req, res) => {
   }
 });
 
-router.delete("/:identifier", async (req, res) => {
+router.delete("/:identifier", auth, adminOnly, async (req, res) => {
   try {
     const { identifier } = req.params;
     console.log("🗑️ Attempting to decommission gadget:", identifier);
@@ -208,7 +235,7 @@ router.delete("/:identifier", async (req, res) => {
 });
 
 // Update the self-destruct endpoint
-router.post("/:identifier/self-destruct", async (req, res) => {
+router.post("/:identifier/self-destruct", auth, adminOnly, async (req, res) => {
   try {
     const { identifier } = req.params;
     console.log("💥 Attempting to self-destruct gadget:", identifier);
