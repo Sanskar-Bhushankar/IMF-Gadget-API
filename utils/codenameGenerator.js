@@ -1,5 +1,5 @@
 const { uniqueNamesGenerator, adjectives, animals } = require("unique-names-generator");
-const { sequelize } = require("../config/database");
+const Gadget = require("../models/Gadget");
 
 const generateUniqueCodename = async () => {
   let codename;
@@ -18,18 +18,14 @@ const generateUniqueCodename = async () => {
     console.log(`Generated codename: ${codename}`);
 
     try {
-      // Check if codename already exists in DB
-      const [results] = await sequelize.query(
-        "SELECT COUNT(*) FROM gadgets WHERE codename = $1",
-        { 
-          bind: [codename],
-          type: sequelize.QueryTypes.SELECT
+      // Check if codename already exists using the model
+      const count = await Gadget.count({
+        where: {
+          codename: codename
         }
-      );
+      });
 
-      console.log(`Database check result:`, results);
-      // PostgreSQL returns the count as count property
-      if (parseInt(results.count) === 0) {
+      if (count === 0) {
         isUnique = true;
         console.log(`✅ Unique codename found: ${codename}`);
       }
