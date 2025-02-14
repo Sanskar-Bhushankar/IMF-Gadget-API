@@ -136,4 +136,57 @@ router.patch("/:identifier", async (req, res) => {
   }
 });
 
+router.delete("/:identifier", async (req, res) => {
+  try {
+    const { identifier } = req.params; // This can be either id or codename
+
+    // Determine if identifier is UUID or codename
+    const isUUID = identifier.includes('-');
+    
+    // Find the gadget first to check its current status
+    const existingGadget = await prisma.gadget.findUnique({
+      where: isUUID 
+        ? { id: identifier }
+        : { codename: identifier }
+    });
+
+    if (!existingGadget) {
+      return res.status(404).json({ 
+        message: "❌ Gadget not found!" 
+      });
+    }
+
+    // Check if gadget is already decommissioned or destroyed
+    if (['Decommissioned', 'Destroyed'].includes(existingGadget.status)) {
+      return res.status(400).json({ 
+        message: `❌ Gadget is already ${existingGadget.status.toLowerCase()}!` 
+      });
+    }
+
+    // Update the gadget to Decommissioned status
+    const decommissionedGadget = await prisma.gadget.update({
+      where: isUUID 
+        ? { id: identifier }
+        : { codename: identifier },
+      data: {
+        status: 'Decommissioned',
+        decommissioned_at: new Date(),
+        updated_at: new Date()
+      }
+    });
+
+    console.log("✅ Gadget decommissioned:", decommissionedGadget);
+    res.json({ 
+      message: "✅ Gadget decommissioned successfully!", 
+      gadget: decommissionedGadget 
+    });
+
+  } catch (error) {
+    console.error("❌ Error in DELETE /gadgets:", error);
+    res.status(500).json({ 
+      message: "❌ Failed to decommission gadget!" 
+    });
+  }
+});
+
 module.exports = router;
